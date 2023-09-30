@@ -4,6 +4,9 @@ FROM google/dart:latest
 # Set the working directory in the container
 WORKDIR /app
 
+# Install SQLite3
+RUN apt-get update && apt-get install -y sqlite3 libsqlite3-dev
+
 # Copy the local package files to the container's workspace
 ADD pubspec.yaml /app/pubspec.yaml
 RUN pub get --offline
