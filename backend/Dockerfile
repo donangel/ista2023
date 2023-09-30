@@ -1,5 +1,5 @@
 # Use the official Dart image as a parent image
-FROM google/dart:latest
+FROM dart:stable
 
 # Set the working directory in the container
 WORKDIR /app
@@ -9,10 +9,10 @@ RUN apt-get update && apt-get install -y sqlite3 libsqlite3-dev
 
 # Copy the local package files to the container's workspace
 ADD pubspec.yaml /app/pubspec.yaml
-RUN pub get --offline
+RUN dart pub get
 
 ADD . /app
-RUN pub get --offline
+RUN dart pub get
 
 # Make port 8080 available to the world outside this container
 EXPOSE 8080
