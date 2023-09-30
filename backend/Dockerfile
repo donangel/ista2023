@@ -18,4 +18,4 @@ RUN dart pub get
 EXPOSE 8080
 
 # Run the application
-CMD ["dart", "bin/main.dart"]
+CMD ["dart", "bin/my_backend_app.dart"]
