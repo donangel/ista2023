@@ -463,3 +463,82 @@ Let's troubleshoot:
    This can provide more insights if there's an issue inside the container or with the Dart server.
 
 After verifying and applying necessary changes from the above steps, try accessing `http://localhost:8080` again. If you're still facing issues, please provide any additional error messages or logs, and I'll help you further troubleshoot the situation.
+
+## Prompt 8 ##
+
+Let's add `/users` backend API, which will be a testig stub for list of users, providing five example users with a fixed data.
+
+## Answer 8 ##
+
+Sure, let's add a `/users` endpoint to our Dart backend that returns a list of five example users.
+
+1. **Modify your Dart Backend**
+
+   In your `server.dart` file inside the `bin` directory, let's make some modifications:
+
+   ```dart
+   import 'dart:convert';
+   import 'package:shelf/shelf.dart' as shelf;
+   import 'package:shelf/shelf_io.dart' as io;
+
+   void main() {
+     var handler = const shelf.Pipeline().addMiddleware(shelf.logRequests())
+         .addHandler(_router);
+
+     io.serve(handler, '0.0.0.0', 8080).then((server) {
+       print('Serving at http://${server.address.host}:${server.port}');
+     });
+   }
+
+   shelf.Response _router(shelf.Request request) {
+     switch (request.url.path) {
+       case 'users':
+         return _usersHandler(request);
+       default:
+         return shelf.Response.notFound('Not Found');
+     }
+   }
+
+   shelf.Response _usersHandler(shelf.Request request) {
+     final users = [
+       {'id': 1, 'name': 'Alice', 'email': 'alice@example.com'},
+       {'id': 2, 'name': 'Bob', 'email': 'bob@example.com'},
+       {'id': 3, 'name': 'Charlie', 'email': 'charlie@example.com'},
+       {'id': 4, 'name': 'David', 'email': 'david@example.com'},
+       {'id': 5, 'name': 'Eva', 'email': 'eva@example.com'},
+     ];
+
+     return shelf.Response.ok(
+       json.encode(users),
+       headers: {'content-type': 'application/json'}
+     );
+   }
+   ```
+
+   Here, I introduced a router function, `_router`, that directs incoming requests based on their paths. The `/users` path returns a static list of five users in JSON format. Other paths will return a "Not Found" message.
+
+2. **Rebuild and Run the Docker Image**
+
+   Rebuild the Docker image:
+
+   ```bash
+   docker build -t your-backend-image-name .
+   ```
+
+   Run the Docker container:
+
+   ```bash
+   docker run -p 8080:8080 your-backend-image-name
+   ```
+
+3. **Access the `/users` Endpoint**
+
+   After running the Docker container, visit `http://localhost:8080/users` in a web browser or use a tool like `curl`:
+
+   ```bash
+   curl http://localhost:8080/users
+   ```
+
+   You should receive a JSON response containing the list of five example users.
+
+With this setup, you've created a simple stub API that provides fixed user data. As you expand the functionality of your backend, you can extend the `_router` function to handle more routes and incorporate more complex logic and data sources.
