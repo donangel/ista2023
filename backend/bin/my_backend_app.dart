@@ -2,6 +2,14 @@ import 'dart:convert';
 import 'package:shelf/shelf.dart' as shelf;
 import 'package:shelf/shelf_io.dart' as io;
 
+shelf.Response _addCorsHeaders(shelf.Response response) {
+  return response.change(headers: {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Origin, Content-Type',
+  });
+}
+
 void main() {
   var handler = const shelf.Pipeline()
       .addMiddleware(shelf.logRequests())
@@ -15,7 +23,7 @@ void main() {
 shelf.Response _router(shelf.Request request) {
   switch (request.url.path) {
     case 'users':
-      return _usersHandler(request);
+      return _addCorsHeaders(_usersHandler(request));
     default:
       return shelf.Response.notFound('Not Found');
   }
