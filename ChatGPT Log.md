@@ -1,5 +1,7 @@
 # ISTA 2023: ChatGPT: My Log #
 
+This whole transcript is [accessible directly at ChatGPT](https://chat.openai.com/share/0c7f81e2-120b-4008-945b-ac1c994cf6da). Below are all prompts and answers, on which I based the presentation contents.
+
 ## Prompt 1 ##
 
 Dear ChatGPT, I want to create a web app, which will be separated in two Docker containers: one serving my frontend, and one serving my backend services. The backend services container will have a simple service that it built with Flutter and uses lightweight relational database from the same container. The frontend service container will serve a Flutter frontend application.
@@ -542,3 +544,291 @@ Sure, let's add a `/users` endpoint to our Dart backend that returns a list of f
    You should receive a JSON response containing the list of five example users.
 
 With this setup, you've created a simple stub API that provides fixed user data. As you expand the functionality of your backend, you can extend the `_router` function to handle more routes and incorporate more complex logic and data sources.
+
+## Prompt 9 ##
+
+Good! Now we should create the Frontend. I want the frontend to run on a different container, and connect with the backend container throughout the already exposed API.
+Please, write the frontend by using Flutter and taking into account it'll produce a web application only.
+
+## Answer 9 ##
+
+Certainly! To achieve this, we'll follow these steps:
+
+1. **Set Up the Flutter Web Project**
+2. **Write the Flutter Web Application to Fetch Users from the Backend**
+3. **Dockerize the Flutter Web Application**
+
+### 1. Set Up the Flutter Web Project ###
+
+If you haven't already, make sure to enable web support for Flutter:
+
+```bash
+flutter channel stable
+flutter upgrade
+flutter config --enable-web
+```
+
+Now, create a new Flutter project:
+
+```bash
+flutter create flutter_web_frontend
+cd flutter_web_frontend
+```
+
+Then, add `http` package to your `pubspec.yaml` file to allow for API calls:
+
+```yaml
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^0.13.3
+```
+
+Run `flutter pub get` to fetch the dependencies.
+
+### 2. Write the Flutter Web Application ###
+
+Here's a basic Flutter web application to fetch and display the list of users:
+
+```dart
+// lib/main.dart
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+
+void main() => runApp(MyApp());
+
+class MyApp extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Flutter Web Frontend',
+      theme: ThemeData(primarySwatch: Colors.blue),
+      home: UserListPage(),
+    );
+  }
+}
+
+class UserListPage extends StatefulWidget {
+  @override
+  _UserListPageState createState() => _UserListPageState();
+}
+
+class _UserListPageState extends State<UserListPage> {
+  List<dynamic> users = [];
+
+  @override
+  void initState() {
+    super.initState();
+    fetchUsers();
+  }
+
+  fetchUsers() async {
+    var response = await http.get(Uri.parse('http://backend:8080/users'));
+    if (response.statusCode == 200) {
+      setState(() {
+        users = json.decode(response.body);
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text("Users")),
+      body: ListView.builder(
+        itemCount: users.length,
+        itemBuilder: (context, index) {
+          return ListTile(
+            title: Text(users[index]['name']),
+            subtitle: Text(users[index]['email']),
+          );
+        },
+      ),
+    );
+  }
+}
+```
+
+Take note of the URL `http://backend:8080/users` in the `fetchUsers` method. When running in containers, you can use the name of the backend container (as long as they are in the same network) to communicate between containers. In this case, we've assumed the name "backend" for the backend container, but you can adjust it according to your Docker setup.
+
+### 3. Dockerize the Flutter Web Application ###
+
+Create a `Dockerfile` in the root of your `flutter_web_frontend` directory:
+
+```Dockerfile
+# Use the official Flutter SDK as the builder image
+FROM google/flutter:latest as builder
+
+# Set working directory
+WORKDIR /app
+
+# Copy everything over
+COPY . .
+
+# Build the web version of the app
+RUN flutter pub get
+RUN flutter build web
+
+# Use nginx for serving the built web app
+FROM nginx:alpine
+
+# Copy the build files from the build environment
+COPY --from=builder /app/build/web/ /usr/share/nginx/html
+
+# Expose port 80 for nginx
+EXPOSE 80
+```
+
+Build and run the frontend container:
+
+```bash
+docker build -t flutter-web-frontend-image .
+docker run -p 80:80 flutter-web-frontend-image
+```
+
+Now, your frontend will be available at `http://localhost`. Remember, you'll need to ensure the backend container is running and the frontend container can communicate with it using the assumed container name "backend" or whatever you've set it to.
+
+In a real-world scenario, using Docker Compose can make managing multi-container applications significantly more straightforward. If you need a Docker Compose setup for these two containers, do let me know!
+
+## Prompt 10 ##
+
+I'm getting this error in my console when trying to access the backend:
+
+```txt
+Access to XMLHttpRequest at 'http://localhost:8080/users' from origin 'http://localhost:64817' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+```
+
+How to fix it?
+
+## Answer 10 ##
+
+The error you're seeing is due to the Cross-Origin Resource Sharing (CORS) policy, which is a security feature implemented by web browsers to control requests made to different origins.
+
+To resolve this, you'll need to enable CORS support on your backend so that it sends the appropriate headers allowing the request from the Flutter web app.
+
+Here's how to enable CORS for your Dart backend using the `shelf_cors` package:
+
+1. **Add `shelf_cors` to your Backend's `pubspec.yaml`**
+
+   Add the `shelf_cors` package to your backend project's `pubspec.yaml`:
+
+   ```yaml
+   dependencies:
+     shelf: ^1.2.0
+     shelf_cors: ^1.0.1
+     # ... other dependencies ...
+   ```
+
+   And then run `dart pub get`.
+
+2. **Update the Backend to Use CORS Middleware**
+
+   Modify your Dart backend code to include CORS headers:
+
+   ```dart
+   import 'package:shelf/shelf.dart' as shelf;
+   import 'package:shelf/shelf_io.dart' as io;
+   import 'package:shelf_cors/shelf_cors.dart' as shelf_cors;
+
+   // ... rest of your code ...
+
+   void main() {
+     var handler = const shelf.Pipeline()
+         .addMiddleware(shelf.logRequests())
+         .addMiddleware(shelf_cors.createCorsHeadersMiddleware(
+           headers: {
+             'Access-Control-Allow-Origin': '*',
+             // You can add more headers if needed
+           },
+         ))
+         .addHandler(_router);
+
+     io.serve(handler, '0.0.0.0', 8080).then((server) {
+       print('Serving at http://${server.address.host}:${server.port}');
+     });
+   }
+
+   // ... rest of your code ...
+   ```
+
+3. **Rebuild and Restart Your Backend Container**
+
+   After making the above changes, rebuild your backend Docker image and run it. The backend should now accept requests from the frontend even if they're on different ports or domains due to the CORS headers.
+
+Do note that the configuration I provided (`'Access-Control-Allow-Origin': '*'`) allows any origin to access the resources. In a production environment, you'd want to be more restrictive and specify only the trusted domains.
+
+## Prompt 11 ##
+
+I'm getting this error when updating dependencies:
+
+```txt
+Because my_backend_app depends on shelf_cors ^1.0.1 which doesn't match any
+  versions, version solving failed.
+```
+
+## Answer 11 ###
+
+It seems like the version of `shelf_cors` I specified doesn't exist or there's an issue fetching it. My apologies for the oversight.
+
+Let's take a different approach:
+
+1. **Check the Available Versions**
+
+   First, check for the latest available versions of the `shelf_cors` package on the [pub.dev website](https://pub.dev/packages/shelf_cors).
+
+2. **Update `pubspec.yaml`**
+
+   Once you've identified the correct version, update your `pubspec.yaml` file with that version. For example:
+
+   ```yaml
+   dependencies:
+     shelf: ^1.2.0
+     shelf_cors: ^X.X.X  # replace X.X.X with the correct version you found
+   ```
+
+3. **Run `dart pub get` Again**
+
+   After updating the `pubspec.yaml`, run `dart pub get` again to fetch the new dependencies.
+
+4. **Proceed with the Previous Instructions**
+
+   Continue with the instructions I provided in the previous message to implement the CORS headers in your backend server using `shelf_cors`.
+
+If you still face any difficulties or encounter further issues, please let me know, and I'll assist you further!
+
+## Prompt 12 ##
+
+It seems that the shelf_cors package is unusable anymore. Is there any other way to do it?
+
+## Answer 12 ##
+
+Absolutely! If `shelf_cors` is not usable anymore, we can manually add the CORS headers to the backend response.
+
+Here's a simple modification to your `_router` function (or wherever you're processing requests) to include the necessary CORS headers:
+
+```dart
+shelf.Response _router(shelf.Request request) {
+  switch (request.url.path) {
+    case 'users':
+      return _addCorsHeaders(_usersHandler(request));
+    default:
+      return shelf.Response.notFound('Not Found');
+  }
+}
+
+// Add this function to manually insert the CORS headers
+shelf.Response _addCorsHeaders(shelf.Response response) {
+  return response.change(headers: {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Origin, Content-Type',
+  });
+}
+```
+
+The `_addCorsHeaders` function can be applied to any response that should support CORS. In the example above, it's added to the `/users` endpoint.
+
+With this modification, you've manually added the CORS headers to the backend response, which should resolve the CORS issue you were facing with the frontend.
+
+Remember: The configuration provided (`'Access-Control-Allow-Origin': '*'`) allows any origin to access the resources. In a production environment, you'd want to be more restrictive and specify only the trusted domains.
